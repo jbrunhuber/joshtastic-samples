@@ -1,0 +1,161 @@
+# Swift KeyPaths
+I sometimes stumble upon KeyPaths in everyday life but was never aware of what‘s going on under the hood. I took a closer look and want to share my insights with you.
+
+## What is a „KeyPath“?
+KeyPaths are references to a property of a type. They‘re useful when you want to perform operations depending on that property, rather on the value behind it. This makes them useful especially for handling collections and key-value observing.
+
+## KeyPaths before Swift 4
+KeyPaths already exist in Objective-C and you can use them in Swift too.
+
+```#keyPath(Person.firstName)```
+
+Technically, the „old“ KeyPaths are just strings, which are slow to parse and aren‘t able to story type information. That‘s why they aren‘t considered as type-safe.
+You also have to deal with memory management when using them with key-value observation together with UIKit. The observed instance might still exist, even the observer is already deallocated. This leads to zombies in your App and if you watched The Walking Dead, you now know which chaos that means.
+
+## Swift KeyPaths
+With the release of Swift 4, new KeyPaths were introduced. Instead of using strings as references, they’re implemented using generic classes. 
+KeyPaths are specified with a backslash `\`
+
+``` 
+let nameKeyPath = \Cat.name
+``` 
+
+The `\` is required to avoid problems with static properties. 
+
+```
+struct Cat {
+    static var intergalagticCatForce: String = "Purring"
+    var name: String
+}
+```
+
+You can also use KeyPaths though nested-types:
+
+```
+struct Food {
+    var calories: Float
+}
+
+struct Cat {
+    var favoriteFood: Food
+}
+
+let calorieKeyPath = \Cat.favoriteFood.calories
+```
+
+Or concat them:
+
+```
+let foodKeyPath = \Cat.favoriteFood
+let calorieKeyPath = foodKeyPath.appending(path: \Food.calories)
+```
+
+### Reading and writing values using KeyPaths
+You can use KeyPaths to get and set values on instances. This is a good way to understand the different types of KeyPaths.
+Let‘s get the cat‘s name using the `nameKeyPath`:
+
+```
+struct Cat {
+    let name: String
+    var color: String
+}
+
+let enchilada = Cat(name: "Enchilada", color: "Brown")
+let name = enchilada[keyPath: \Cat.name]
+```
+
+If you print the type of `nameKeyPath`, you‘ll notice that it‘s a `KeyPath<Cat, String>`.
+
+```
+// KeyPath
+print(type(of: \Cat.name))
+```
+
+That seems not surprisingly but let‘s check out the type if we create a KeyPath on the cats color.
+
+```
+struct Cat {
+    let name: String
+    var color: String
+}
+
+// WritableKeyPath
+print(type(of: \Cat.color))
+```
+
+Here we have `WritableKeyPath<Cat, String>`, a subclass of `KeyPath`. The KeyPath is writable, because the property is defined using `var` instead of `let`, thus it allows us to change the value. Let‘s change the color of the cat:
+
+```
+var enchilada = Cat(name: "Enchilada", color: "Brown")
+enchilada[keyPath: \Cat.color] = "Pink"
+``` 
+
+Great, we successfully changed the color of the cat. But there‘re two types of writable KeyPaths. To demonstrate this, I‘ll declare a new type „Dog“, but this time I‘m using a class instead of a struct.
+
+```
+class Dog {
+    var color = "blue"
+}
+let colorKeyPath = \Dog.color
+```
+
+If you try out the example from above, you‘ll notice that now it‘s not a `WritableKeyPath`; it‘s a `ReferenceWritableKeyPath<Dog, String>`.
+
+### The difference between Writable- and ReferenceWritableKeyPaths
+If you think for `WritableKeyPath<Root, Value>` as a function for the set-action: `(Root, inout Value) -> Void`, you‘ll need to declare `Value` as `inout` parameter, so the value can be mutated. This isn‘t necessary for reference types therefore `ReferenceWriteableKeyPath<Root, Value>` setter function is like `(Root, Value) -> Void`. Pretty much the same, but without the `inout` Parameter.
+
+### Partial- and AnyKeyPath
+When you try to store multiple KeyPaths in a collection you might run into type-problems. Let‘s take the `Cat` example and save both `color` and `name` KeyPaths.
+
+```
+let nameKeyPath = \Cat.name
+let colorKeyPath = \Cat.color
+
+let keyPaths = [nameKeyPath, colorKeyPath]
+print(type(of: keyPaths))
+``` 
+
+The array has the type `Array<WritableKeyPath<Cat, String>>` because the properties are mutable and have the same type.
+Let‘s declare an age property as an integer and try it again:
+
+```
+let keyPaths = [nameKeyPath, colorKeyPath, ageKeyPath]
+print(type(of: keyPaths))
+```
+Now, the type of the array is `PartialKeyPath<Cat>`. PartialKeyPaths store the type-information from the `Root` type, but not from the `Value` type. By using this type of KeyPath, we know that our `Root` element is `Cat`, but we don‘t know what our `Value` is.
+
+We can take this even further: Let‘s think about to store KeyPaths from our `Dog` class. In this case, even the `Root` type doesn’t match. This fully erases the KeyPath to `AnyKeyPath<Any, Any>`.
+
+## Sorting a collection
+One good use-case of KeyPaths is sorting a collection. There has already been a pitch on the Swift forum to implement the feature in the standard library [Sort Collection using KeyPath on Swift Forums](https://forums.swift.org/t/sort-collection-using-keypath/14554). But unfortunately, this hasn’t landed into Swift yet so let’s write a sort function by yourself.
+
+
+```
+extension Collection {
+    
+    func sorted<Value: Comparable>(on property: KeyPath<Element, Value>, by areInIncreasingOrder: (Value, Value) -> Bool) -> [Element] {
+    
+        return sorted { currentElement, nextElement in
+            areInIncreasingOrder(currentElement[keyPath: property], nextElement[keyPath: property])
+        }
+    }
+}
+```
+
+This function takes a keyPath and another `areInIncreasingOrder` function. `areInIncreasingOrder` specifies whether the order should be descending or ascending. If you take a closer look, you’ll notice that the function itself just returns the default sort-function using  `areInIncreasingOrder` with the keyPath subscript access on the properties.
+
+Sorting collections like this never was so easy:
+
+```
+let tacco = Cat(name: "Tacco", favoriteFood: Food(name: "Tacco 🌮", calories: 723))
+let nala = Cat(name: "Nala", favoriteFood: Food(name: "Fish 🐟", calories: 340))
+
+let cats = [whiskers, tacco, nala]
+let sortedByName = cats.sorted(on: \Cat.name, by: <) 
+let sortedByFavouriteFoodKcal = cats.sorted(on: \Cat.favoriteFood.calories, by: <)
+```
+
+The syntax makes it immediately clear how the collection gets sorted without passing complex closures around. 
+
+## Conclusion
+KeyPaths are nothing I use every day but the syntax allows us to write more understandable code. Something I wish would be better integration for Key-Value observation on UIKit classes. It would be nice to observe `UITextField` on `.\name` and update UI e. g. search results. At the moment this is only possible using 3rd party technologies like ReactiveX.9
