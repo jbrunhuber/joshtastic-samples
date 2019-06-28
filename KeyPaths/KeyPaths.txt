@@ -14,7 +14,7 @@ You also have to deal with memory management when using them with key-value obse
 
 ## Swift KeyPaths
 With the release of Swift 4, new KeyPaths were introduced. Instead of using strings as references, they’re implemented using generic classes. 
-KeyPaths are specified with a backslash `\`
+KeyPaths are syntactically specified with a backslash `\`
 
 ``` 
 let nameKeyPath = \Cat.name
@@ -43,7 +43,7 @@ struct Cat {
 let calorieKeyPath = \Cat.favoriteFood.calories
 ```
 
-Or concat them:
+Or append them:
 
 ```
 let foodKeyPath = \Cat.favoriteFood
@@ -71,7 +71,7 @@ If you print the type of `nameKeyPath`, you‘ll notice that it‘s a `KeyPath<C
 print(type(of: \Cat.name))
 ```
 
-That seems not surprisingly but let‘s check out the type if we create a KeyPath on the cats color.
+It‘s not surprising but let‘s check out the type when we create a KeyPath on the cats color.
 
 ```
 struct Cat {
@@ -90,7 +90,7 @@ var enchilada = Cat(name: "Enchilada", color: "Brown")
 enchilada[keyPath: \Cat.color] = "Pink"
 ``` 
 
-Great, we successfully changed the color of the cat. But there‘re two types of writable KeyPaths. To demonstrate this, I‘ll declare a new type „Dog“, but this time I‘m using a class instead of a struct.
+Great, we successfully changed the color of the cat. But there‘re two types of writable KeyPaths. To demonstrate this, I‘ll declare a new type „Dog“, but this time, I‘m using a class instead of a struct.
 
 ```
 class Dog {
@@ -105,7 +105,7 @@ If you try out the example from above, you‘ll notice that now it‘s not a `Wr
 If you think for `WritableKeyPath<Root, Value>` as a function for the set-action: `(Root, inout Value) -> Void`, you‘ll need to declare `Value` as `inout` parameter, so the value can be mutated. This isn‘t necessary for reference types therefore `ReferenceWriteableKeyPath<Root, Value>` setter function is like `(Root, Value) -> Void`. Pretty much the same, but without the `inout` Parameter.
 
 ### Partial- and AnyKeyPath
-When you try to store multiple KeyPaths in a collection you might run into type-problems. Let‘s take the `Cat` example and save both `color` and `name` KeyPaths.
+When you try to store multiple KeyPaths in a collection, you may run into type-problems. Let‘s take the `Cat` example and save both `color` and `name` KeyPaths.
 
 ```
 let nameKeyPath = \Cat.name
@@ -122,7 +122,7 @@ Let‘s declare an age property as an integer and try it again:
 let keyPaths = [nameKeyPath, colorKeyPath, ageKeyPath]
 print(type(of: keyPaths))
 ```
-Now, the type of the array is `PartialKeyPath<Cat>`. PartialKeyPaths store the type-information from the `Root` type, but not from the `Value` type. By using this type of KeyPath, we know that our `Root` element is `Cat`, but we don‘t know what our `Value` is.
+Now, the generic type of the array is `PartialKeyPath<Cat>`. PartialKeyPaths store the type-information from the `Root` type, but not from the `Value` type. By using this type of KeyPath, we know that our `Root` element is `Cat`, but we don‘t know what our `Value` is.
 
 We can take this even further: Let‘s think about to store KeyPaths from our `Dog` class. In this case, even the `Root` type doesn’t match. This fully erases the KeyPath to `AnyKeyPath<Any, Any>`.
 
